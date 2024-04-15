@@ -1,6 +1,7 @@
 using BepInEx;
 using R2API;
 using RoR2;
+using RoR2.Stats;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,9 +20,18 @@ namespace MoreStatistics
     {
         public const string PluginGUID = "com.Nullos.MoreStatistics";
         public const string PluginName = "MoreStatistics";
-        public const string PluginVersion = "1.1.0";
+        public const string PluginVersion = "1.1.3";
 
         public static PluginInfo PInfo { get; private set; }
+
+        String[] statsToDisplay = new String[] { "totalHealthHealed",
+                                                        "totalDistanceTraveled",
+                                                        "totalBloodPurchases",
+                                                        "totalLunarPurchases",
+                                                        "totalDronesPurchased",
+                                                        "totalTurretsPurchased",
+                                                        "totalEliteKills"
+            };
 
         public string[] enemiesNames = ["AcidLarvaBody", "AffixEarthHealerBody", "ArtifactShellBody", "Assassin2Body", "AssassinBody", "BackupDroneBody", "Bandit2Body", "BanditBody", "BeetleBody", "BeetleGuardAllyBody", "BeetleGuardBody", "BeetleGuardCrystalBody", "BeetleQueen2Body", "BellBody", "BisonBody", "BomberBody", "BrotherBody", "BrotherGlassBody", "BrotherHurtBody", "CaptainBody", "ClayBody", "ClayBossBody", "ClayBruiserBody", "ClayGrenadierBody", "CommandoBody", "CommandoPerformanceTestBody", "CrocoBody", "Drone1Body", "Drone2Body", "DroneCommanderBody", "ElectricWormBody", "EmergencyDroneBody", "EnforcerBody", "EngiBeamTurretBody", "EngiBody", "EngiTurretBody", "EngiWalkerTurretBody", "EquipmentDroneBody", "FlameDroneBody", "FlyingVerminBody", "GeepBody", "GipBody", "GolemBody", "GolemBodyInvincible", "GrandParentBody", "GravekeeperBody", "GreaterWispBody", "GupBody", "HANDBody", "HaulerBody", "HereticBody", "HermitCrabBody", "HuntressBody", "ImpBody", "ImpBossBody", "JellyfishBody", "LemurianBody", "LemurianBruiserBody", "LoaderBody", "LunarExploderBody", "LunarGolemBody", "LunarWispBody", "MageBody", "MagmaWormBody", "MegaConstructBody", "MegaDroneBody", "MercBody", "MiniMushroomBody", "MinorConstructAttachableBody", "MinorConstructBody", "MinorConstructOnKillBody", "MissileDroneBody", "NullifierAllyBody", "NullifierBody", "PaladinBody", "ParentBody", "ParentPodBody", "Pot2Body", "PotMobile2Body", "PotMobileBody", "RailgunnerBody", "RoboBallBossBody", "RoboBallGreenBuddyBody", "RoboBallMiniBody", "RoboBallRedBuddyBody", "ScavBody", "ScavLunar1Body", "ScavLunar2Body", "ScavLunar3Body", "ScavLunar4Body", "ShopkeeperBody", "SniperBody", "SquidTurretBody", "SulfurPodBody", "SuperRoboBallBossBody", "TimeCrystalBody", "TitanBody", "TitanGoldBody", "ToolbotBody", "TreebotBody", "Turret1Body", "UrchinTurretBody", "VagrantBody", "VerminBody", "VoidBarnacleBody", "VoidBarnacleNoCastBody", "VoidInfestorBody", "VoidJailerAllyBody", "VoidJailerBody", "VoidMegaCrabAllyBody", "VoidMegaCrabBody", "VoidRaidCrabBody", "VoidRaidCrabJointBody", "VoidSurvivorBody", "VultureBody", "WispBody", "WispSoulBody"];
         public string[] enemiesInteractions = ["killsAgainst", "damageDealtTo", "damageTakenFrom", "killsAgainstElite"];
@@ -59,16 +69,12 @@ namespace MoreStatistics
         // Hook onto SetPlayerInfo (creates the UI for the end of run screen and assign stats)
         private void PlayerInfoHook(On.RoR2.UI.GameEndReportPanelController.orig_SetPlayerInfo orig, RoR2.UI.GameEndReportPanelController self, RunReport.PlayerInfo playerInfo)
         {
-            // Add basic extra stats
-            String[] statsToDisplay = new String[] { "totalHealthHealed",
-                                                        "totalDistanceTraveled",
-                                                        "totalBloodPurchases",
-                                                        "totalLunarPurchases",
-                                                        "totalDronesPurchased",
-                                                        "totalTurretsPurchased",
-                                                        "totalEliteKills"
-            };
+            ClearStatStrips(self.statStrips);
+
+            if (!self.statsToDisplay.Contains(statsToDisplay[0]))
+            {
             self.statsToDisplay = self.statsToDisplay.Concat(statsToDisplay).ToArray();
+            }
 
             orig(self, playerInfo);
 
@@ -167,11 +173,14 @@ namespace MoreStatistics
             }
         }
 
-        private void OnFinishSceneExit(RoR2.SceneExitController sceneExitController)
+        private void ClearStatStrips(List<GameObject> statStrips)
         {
-            Debug.Log("Finished scene exit");
-            string sceneName = SceneManager.GetActiveScene().name;
-            Debug.Log("Current scene" + sceneName);
+            while (statStrips.Count > 0)
+        {
+                int index = statStrips.Count - 1;
+                UnityEngine.Object.Destroy(statStrips[index].gameObject);
+                statStrips.RemoveAt(index);
+            }
         }
 
         private void Update()
