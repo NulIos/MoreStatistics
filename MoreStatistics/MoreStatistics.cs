@@ -43,11 +43,13 @@ namespace MoreStatistics
         private void OnEnable()
         {
             On.RoR2.UI.GameEndReportPanelController.SetPlayerInfo += PlayerInfoHook;
+            On.RoR2.Stats.StatManager.OnGoldCollected += PurchaseHook;
         }
 
         private void OnDisable()
         {
             On.RoR2.UI.GameEndReportPanelController.SetPlayerInfo -= PlayerInfoHook;
+            On.RoR2.Stats.StatManager.OnGoldCollected -= PurchaseHook;
         }
 
         public void Awake()
@@ -63,7 +65,7 @@ namespace MoreStatistics
             }
             customStripPrefab = Assets.mainBundle.LoadAsset<GameObject>("StatStripTemplate");
 
-            SceneExitController.onFinishExit += OnFinishSceneExit;
+            SceneExitController.onFinishExit += PerStageStats.OnFinishSceneExit;
         }
 
         // Hook onto SetPlayerInfo (creates the UI for the end of run screen and assign stats)
@@ -71,9 +73,13 @@ namespace MoreStatistics
         {
             ClearStatStrips(self.statStrips);
 
+            Log.Info($"Null check: {playerInfo.statSheet == null}");
+            Log.Info($"Contains check: {self.statsToDisplay.Contains(statsToDisplay[0])}");
+
             if (!self.statsToDisplay.Contains(statsToDisplay[0]))
             {
-            self.statsToDisplay = self.statsToDisplay.Concat(statsToDisplay).ToArray();
+                Log.Info("Stats added");
+                self.statsToDisplay = self.statsToDisplay.Concat(statsToDisplay).ToArray();
             }
 
             orig(self, playerInfo);
@@ -176,7 +182,7 @@ namespace MoreStatistics
         private void ClearStatStrips(List<GameObject> statStrips)
         {
             while (statStrips.Count > 0)
-        {
+            {
                 int index = statStrips.Count - 1;
                 UnityEngine.Object.Destroy(statStrips[index].gameObject);
                 statStrips.RemoveAt(index);
@@ -189,12 +195,34 @@ namespace MoreStatistics
             {
                 RoR2.Stats.StatSheet statSheet = PlayerCharacterMasterController.instances[0].master.GetComponent<RoR2.Stats.PlayerStatsComponent>().currentStats;
 
-                Debug.Log("STAT SHEET\n");
+                Log.Info("STAT SHEET\n");
                 foreach(RoR2.Stats.StatField field in statSheet.fields)
                 {
-                    Debug.Log($"{field.name} : {field}");
+                    Log.Info($"{field.name} : {field}");
+                }
+            } else if (Input.GetKeyDown(KeyCode.F3))
+            {
+                RoR2.Stats.StatDef.Register("testStat", RoR2.Stats.StatRecordType.Sum, RoR2.Stats.StatDataType.ULong, 0.0);
+                PlayerCharacterMasterController.instances[0].master.GetComponent<RoR2.Stats.PlayerStatsComponent>().currentStats = RoR2.Stats.StatSheet.New();
+            } else if(Input.GetKeyDown(KeyCode.F4))
+            {
+                Log.Info("STAT FIELD TEMPLATE\n");
+                foreach (RoR2.Stats.StatField field in RoR2.Stats.StatSheet.fieldsTemplate)
+                {
+                    Log.Info($"{field.name} : {field}");
                 }
             }
+        }
+
+        private void PurchaseHook(On.RoR2.Stats.StatManager.orig_OnGoldCollected orig, RoR2.CharacterMaster master, ulong amount)
+        {
+            orig(master, amount);
+            Log.Info("On gold hook");
+        }
+
+        public static void AddStatDefToStatSheet(RoR2.CharacterMaster master)
+        {
+            RoR2.Stats.StatDef.Register("morestatistics.perstage.goldcollected", StatRecordType.Sum, StatDataType.ULong, 1.0);
         }
     }
 }
