@@ -4,11 +4,13 @@ using RoR2;
 using RoR2.Stats;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using static RoR2.EOSStatManager;
 
 namespace MoreStatistics
 {
@@ -20,36 +22,42 @@ namespace MoreStatistics
     {
         public const string PluginGUID = "com.Nullos.MoreStatistics";
         public const string PluginName = "MoreStatistics";
-        public const string PluginVersion = "1.1.3";
+        public const string PluginVersion = "2.0.1";
 
         public static PluginInfo PInfo { get; private set; }
 
-        String[] statsToDisplay = new String[] { "totalHealthHealed",
-                                                        "totalDistanceTraveled",
-                                                        "totalBloodPurchases",
-                                                        "totalLunarPurchases",
-                                                        "totalDronesPurchased",
-                                                        "totalTurretsPurchased",
-                                                        "totalEliteKills"
-            };
+        private string[] statsToDisplay = [ "totalHealthHealed",
+                                    "totalDistanceTraveled",
+                                    "totalBloodPurchases",
+                                    "totalLunarPurchases",
+                                    "totalDronesPurchased",
+                                    "totalTurretsPurchased",
+                                    "totalEliteKills"
+            ];
 
-        public string[] enemiesNames = ["AcidLarvaBody", "AffixEarthHealerBody", "ArtifactShellBody", "Assassin2Body", "AssassinBody", "BackupDroneBody", "Bandit2Body", "BanditBody", "BeetleBody", "BeetleGuardAllyBody", "BeetleGuardBody", "BeetleGuardCrystalBody", "BeetleQueen2Body", "BellBody", "BisonBody", "BomberBody", "BrotherBody", "BrotherGlassBody", "BrotherHurtBody", "CaptainBody", "ClayBody", "ClayBossBody", "ClayBruiserBody", "ClayGrenadierBody", "CommandoBody", "CommandoPerformanceTestBody", "CrocoBody", "Drone1Body", "Drone2Body", "DroneCommanderBody", "ElectricWormBody", "EmergencyDroneBody", "EnforcerBody", "EngiBeamTurretBody", "EngiBody", "EngiTurretBody", "EngiWalkerTurretBody", "EquipmentDroneBody", "FlameDroneBody", "FlyingVerminBody", "GeepBody", "GipBody", "GolemBody", "GolemBodyInvincible", "GrandParentBody", "GravekeeperBody", "GreaterWispBody", "GupBody", "HANDBody", "HaulerBody", "HereticBody", "HermitCrabBody", "HuntressBody", "ImpBody", "ImpBossBody", "JellyfishBody", "LemurianBody", "LemurianBruiserBody", "LoaderBody", "LunarExploderBody", "LunarGolemBody", "LunarWispBody", "MageBody", "MagmaWormBody", "MegaConstructBody", "MegaDroneBody", "MercBody", "MiniMushroomBody", "MinorConstructAttachableBody", "MinorConstructBody", "MinorConstructOnKillBody", "MissileDroneBody", "NullifierAllyBody", "NullifierBody", "PaladinBody", "ParentBody", "ParentPodBody", "Pot2Body", "PotMobile2Body", "PotMobileBody", "RailgunnerBody", "RoboBallBossBody", "RoboBallGreenBuddyBody", "RoboBallMiniBody", "RoboBallRedBuddyBody", "ScavBody", "ScavLunar1Body", "ScavLunar2Body", "ScavLunar3Body", "ScavLunar4Body", "ShopkeeperBody", "SniperBody", "SquidTurretBody", "SulfurPodBody", "SuperRoboBallBossBody", "TimeCrystalBody", "TitanBody", "TitanGoldBody", "ToolbotBody", "TreebotBody", "Turret1Body", "UrchinTurretBody", "VagrantBody", "VerminBody", "VoidBarnacleBody", "VoidBarnacleNoCastBody", "VoidInfestorBody", "VoidJailerAllyBody", "VoidJailerBody", "VoidMegaCrabAllyBody", "VoidMegaCrabBody", "VoidRaidCrabBody", "VoidRaidCrabJointBody", "VoidSurvivorBody", "VultureBody", "WispBody", "WispSoulBody"];
-        public string[] enemiesInteractions = ["killsAgainst", "damageDealtTo", "damageTakenFrom", "killsAgainstElite"];
-        public string[] statGameObjectLabels = ["KillLabel", "DealtLabel", "TakenLabel", "EliteLabel"];
-        public string[] statGameObjectValueLabels = ["KillValueLabel", "DealtValueLabel", "TakenValueLabel", "EliteValueLabel"];
-        public string[] statNameToken = ["STATNAME_TOTALKILLS", "STATNAME_TOTALDAMAGEDEALT", "STATNAME_TOTALDAMAGETAKEN", "STATNAME_TOTALELITEKILLS"];
-        public GameObject customStripPrefab;
+        // UI
+        private Transform gameEndReportPanel;
+        private GameObject moreButtonsPrefab;
+        private GameObject mobStatsPanelPrefab;
+        private GameObject mobStatsStripPrefab;
+
+        private Transform parentTransform;
+        private GameObject mobStatsPanel = null;
+
+        // Stat names
+        private List<string> mobNames;
+        private string[] statPrefix = { "damageDealtTo", "damageTakenFrom", "killsAgainst", "killsAgainstElite" };
 
         private void OnEnable()
         {
             On.RoR2.UI.GameEndReportPanelController.SetPlayerInfo += PlayerInfoHook;
-            On.RoR2.Stats.StatManager.OnGoldCollected += PurchaseHook;
+            On.RoR2.UI.GameEndReportPanelController.Awake += EndMenuHook;
         }
 
         private void OnDisable()
         {
             On.RoR2.UI.GameEndReportPanelController.SetPlayerInfo -= PlayerInfoHook;
-            On.RoR2.Stats.StatManager.OnGoldCollected -= PurchaseHook;
+            On.RoR2.UI.GameEndReportPanelController.Awake -= EndMenuHook;
         }
 
         public void Awake()
@@ -57,43 +65,152 @@ namespace MoreStatistics
             Log.Init(Logger);
 
             PInfo = Info;
-            Assets.Init();
 
+            // Use only mobs from the txt file
+            string mobNamesPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(MoreStatistics.PInfo.Location), "mobNames.txt");
+            populateMobList(mobNamesPath);
+
+            // Load assets
+            Assets.Init();
             if (Assets.mainBundle == null)
             {
                 Log.Error("Bundle is null");
             }
-            customStripPrefab = Assets.mainBundle.LoadAsset<GameObject>("StatStripTemplate");
 
-            SceneExitController.onFinishExit += PerStageStats.OnFinishSceneExit;
+            mobStatsPanelPrefab = Assets.mainBundle.LoadAsset<GameObject>("MobStats");
+
+            mobStatsStripPrefab = Assets.mainBundle.LoadAsset<GameObject>("StatStrip");
+
+            moreButtonsPrefab = Assets.mainBundle.LoadAsset<GameObject>("MoreButtonsArea");
+        }
+
+        private void EndMenuHook(On.RoR2.UI.GameEndReportPanelController.orig_Awake orig, RoR2.UI.GameEndReportPanelController self)
+        {
+            orig(self);
+
+            // Parent game object
+            parentTransform = self.transform.Find("SafeArea (JUICED)/BodyArea");
+
+            // Create buttons area
+            GameObject buttonsArea = Instantiate(moreButtonsPrefab, parentTransform);
+            // Add listener
+            GameObject mobButtonGO = buttonsArea.transform.Find("MobStatsButton").gameObject;
+            Button mobButton = mobButtonGO.GetComponent<Button>();
+            mobButton.onClick.AddListener(openStatPanel);
         }
 
         // Hook onto SetPlayerInfo (creates the UI for the end of run screen and assign stats)
-        private void PlayerInfoHook(On.RoR2.UI.GameEndReportPanelController.orig_SetPlayerInfo orig, RoR2.UI.GameEndReportPanelController self, RunReport.PlayerInfo playerInfo)
+        private void PlayerInfoHook(On.RoR2.UI.GameEndReportPanelController.orig_SetPlayerInfo orig, RoR2.UI.GameEndReportPanelController self, RunReport.PlayerInfo playerInfo, int playerIndex)
         {
-            ClearStatStrips(self.statStrips);
-
-            Log.Info($"Null check: {playerInfo.statSheet == null}");
-            Log.Info($"Contains check: {self.statsToDisplay.Contains(statsToDisplay[0])}");
-
             if (!self.statsToDisplay.Contains(statsToDisplay[0]))
             {
                 Log.Info("Stats added");
                 self.statsToDisplay = self.statsToDisplay.Concat(statsToDisplay).ToArray();
             }
 
-            orig(self, playerInfo);
+            orig(self, playerInfo, playerIndex);
 
-            //Add every enemy stat
             List<string> enemiesNamesPlayerInteractedWith = GetEnemiesNamesPlayerInteractedWith(playerInfo.statSheet);
 
-            int i = self.statStrips.Count;
-            AllocateStatStrip(enemiesNamesPlayerInteractedWith.Count, self.statStrips, self.statContentArea);
+            createMobStatPanel();
+
+            Transform stripContainerTransform = mobStatsPanel.transform.Find("Panel/Scroll View/Viewport/Container");
+
+            StatSheet statSheet = playerInfo.statSheet;
+            StatDef statDef;
+            ulong value;
+
+            // Mithrix has multiple bodies depending on combat phase
+            ulong killsMithrix = 0;
+            ulong damageDealtToMithrix = 0;
+            ulong damageTakenFromMithrix = 0;
+            GameObject mithrixStatStrip = null;
 
             foreach(string enemyName in enemiesNamesPlayerInteractedWith)
             {
-                AssignStatToStrip(playerInfo.statSheet, enemyName, self.statStrips[i]);
-                i++;
+                GameObject bodyPrefab;
+                CharacterBody characterBody;
+                Texture bodyIcon;
+                GameObject statStrip;
+                if (enemyName == "BrotherHauntBody" || enemyName == "BrotherHurtBody")
+                {
+                    if(mithrixStatStrip == null)
+                    {
+                        bodyPrefab = BodyCatalog.FindBodyPrefab(enemyName);
+                        characterBody = bodyPrefab.GetComponent<CharacterBody>();
+
+                        bodyIcon = characterBody.portraitIcon;
+
+                        statStrip = Instantiate(mobStatsStripPrefab, stripContainerTransform);
+                        statStrip.transform.Find("Image/Image").GetComponent<RawImage>().texture = bodyIcon;
+
+                        // Kills against enemies
+                        statDef = StatDef.Find($"killsAgainst.{enemyName}");
+                        value = statSheet.GetStatValueULong(statDef);
+                        statStrip.transform.Find("Killed/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
+                        killsMithrix = value;
+
+                        // Damage dealt
+                        statDef = StatDef.Find($"damageDealtTo.{enemyName}");
+                        value = statSheet.GetStatValueULong(statDef);
+                        statStrip.transform.Find("DamageDealt/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
+                        damageDealtToMithrix = value;
+
+                        // Damage taken
+                        statDef = StatDef.Find($"damageTakenFrom.{enemyName}");
+                        value = statSheet.GetStatValueULong(statDef);
+                        statStrip.transform.Find("DamageTaken/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
+                        damageTakenFromMithrix = value;
+
+                        mithrixStatStrip = statStrip;
+                    }
+                    else
+                    {
+                        statStrip = mithrixStatStrip;
+
+                        statDef = StatDef.Find($"killsAgainst.{enemyName}");
+                        value = statSheet.GetStatValueULong(statDef) + killsMithrix;
+                        statStrip.transform.Find("Killed/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
+                        killsMithrix = value;
+
+                        // Damage dealt
+                        statDef = StatDef.Find($"damageDealtTo.{enemyName}");
+                        value = statSheet.GetStatValueULong(statDef) + damageDealtToMithrix;
+                        statStrip.transform.Find("DamageDealt/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
+                        damageDealtToMithrix = value;
+
+                        // Damage taken
+                        statDef = StatDef.Find($"damageTakenFrom.{enemyName}");
+                        value = statSheet.GetStatValueULong(statDef) + damageTakenFromMithrix;
+                        statStrip.transform.Find("DamageTaken/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
+                        damageTakenFromMithrix = value;
+                    }
+
+                    continue;
+                }
+
+                bodyPrefab = BodyCatalog.FindBodyPrefab(enemyName);
+                characterBody = bodyPrefab.GetComponent<CharacterBody>();
+
+                bodyIcon = characterBody.portraitIcon;
+
+                statStrip = Instantiate(mobStatsStripPrefab, stripContainerTransform);
+                statStrip.transform.Find("Image/Image").GetComponent<RawImage>().texture = bodyIcon;
+
+                // Kills against enemies
+                statDef = StatDef.Find($"killsAgainst.{enemyName}");
+                value = statSheet.GetStatValueULong(statDef);
+                statStrip.transform.Find("Killed/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
+
+                // Damage dealt
+                statDef = StatDef.Find($"damageDealtTo.{enemyName}");
+                value = statSheet.GetStatValueULong(statDef);
+                statStrip.transform.Find("DamageDealt/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
+
+                // Damage taken
+                statDef = StatDef.Find($"damageTakenFrom.{enemyName}");
+                value = statSheet.GetStatValueULong(statDef);
+                statStrip.transform.Find("DamageTaken/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
             }
         }
 
@@ -103,12 +220,12 @@ namespace MoreStatistics
         {
             List<string> enemiesNamesPlayerInteractedWith = new List<string>();
 
-            foreach(string enemyName in enemiesNames)
+            foreach(string enemyName in mobNames)
             {
-                foreach(string enemyInteraction in enemiesInteractions)
+                foreach(string prefix in statPrefix)
                 {
-                    string statName = $"{enemyInteraction}.{enemyName}";
-                    RoR2.Stats.StatDef statDef = RoR2.Stats.StatDef.Find(statName);
+                    string statName = $"{prefix}.{enemyName}";
+                    StatDef statDef = StatDef.Find(statName);
 
                     string displayValue = statSheet.GetStatDisplayValue(statDef);
 
@@ -126,103 +243,64 @@ namespace MoreStatistics
             return enemiesNamesPlayerInteractedWith;
         }
 
-        // Create the ui element
-        private void AllocateStatStrip(int count, List<GameObject> statStrips, RectTransform statContentArea)
+        private void populateMobList(string path)
         {
-            count += statStrips.Count;
-            while (statStrips.Count > count)
+            char[] charsToTrim = { ' ', '\n' };
+            mobNames = new List<string>();
+            var lines = File.ReadLines(path);
+            foreach(var line in lines)
             {
-                int index = statStrips.Count - 1;
-                UnityEngine.Object.Destroy(statStrips[index].gameObject);
-                statStrips.RemoveAt(index);
-            }
-            while (statStrips.Count < count)
-            {
-                GameObject gameObject = UnityEngine.Object.Instantiate(customStripPrefab, statContentArea);
-                gameObject.SetActive(value: true);
-                statStrips.Add(gameObject);
+                mobNames.Add(line.Trim(charsToTrim));
             }
         }
 
-        // Fill ui with values
-        private void AssignStatToStrip(RoR2.Stats.StatSheet srcStatSheet, string enemyName, GameObject destStatStrip)
+        private void createMobStatPanel()
         {
-            GameObject bodyPrefab = RoR2.BodyCatalog.FindBodyPrefab(enemyName);
-            RoR2.CharacterBody characterBody = bodyPrefab.GetComponent<RoR2.CharacterBody>();
-
-            string bodyToken = characterBody.baseNameToken;
-            destStatStrip.transform.Find("BodyName").GetComponent<TextMeshProUGUI>().text = RoR2.Language.GetString(bodyToken);
-
-            Texture bodyIcon = characterBody.portraitIcon;
-            destStatStrip.transform.Find("PortraitIcon").GetComponent<RawImage>().texture = bodyIcon;
-
-            for (int i = 0; i < enemiesInteractions.Length; i++)
+            if(mobStatsPanel != null)
             {
-                string enemyInteraction = enemiesInteractions[i];
-                string statName = $"{enemyInteraction}.{enemyName}";
-
-                RoR2.Stats.StatDef statDef = RoR2.Stats.StatDef.Find(statName);
-
-                string arg = "0";
-                ulong value = 0uL;
-                if (srcStatSheet != null)
-                {
-                    arg = srcStatSheet.GetStatDisplayValue(statDef);
-                    value = srcStatSheet.GetStatPointValue(statDef);
-                }
-                string statToken = Language.GetString(statNameToken[i]);
-                string text = string.Format(Language.GetString("STAT_NAME_VALUE_FORMAT"), statToken, arg);
-                destStatStrip.transform.Find(statGameObjectLabels[i]).GetComponent<TextMeshProUGUI>().text = text;
-
-                string string2 = Language.GetString("STAT_POINTS_FORMAT");
-                destStatStrip.transform.Find(statGameObjectValueLabels[i]).GetComponent<TextMeshProUGUI>().text = string.Format(string2, TextSerialization.ToStringNumeric(value));
+                Destroy(mobStatsPanel);
             }
+            mobStatsPanel = Instantiate(mobStatsPanelPrefab, parentTransform);
+
+            mobStatsPanel.transform.Find("Panel/Top/Close").GetComponent<Button>().onClick.AddListener(closeStatPanel);
+
+            mobStatsPanel.SetActive(false);
+        }
+        
+        private void closeStatPanel()
+        {
+            if (mobStatsPanel == null)
+            {
+                return;
+            }
+            mobStatsPanel.SetActive(false);
         }
 
-        private void ClearStatStrips(List<GameObject> statStrips)
+        private void openStatPanel()
         {
-            while (statStrips.Count > 0)
+            if(mobStatsPanel != null)
             {
-                int index = statStrips.Count - 1;
-                UnityEngine.Object.Destroy(statStrips[index].gameObject);
-                statStrips.RemoveAt(index);
+                mobStatsPanel.SetActive(true);
             }
         }
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.F2))
-            {
-                RoR2.Stats.StatSheet statSheet = PlayerCharacterMasterController.instances[0].master.GetComponent<RoR2.Stats.PlayerStatsComponent>().currentStats;
+            //if (Input.GetKeyDown(KeyCode.F2))
+            //{
+            //    RoR2.Stats.StatSheet statSheet = PlayerCharacterMasterController.instances[0].master.GetComponent<RoR2.Stats.PlayerStatsComponent>().currentStats;
 
-                Log.Info("STAT SHEET\n");
-                foreach(RoR2.Stats.StatField field in statSheet.fields)
-                {
-                    Log.Info($"{field.name} : {field}");
-                }
-            } else if (Input.GetKeyDown(KeyCode.F3))
-            {
-                RoR2.Stats.StatDef.Register("testStat", RoR2.Stats.StatRecordType.Sum, RoR2.Stats.StatDataType.ULong, 0.0);
-                PlayerCharacterMasterController.instances[0].master.GetComponent<RoR2.Stats.PlayerStatsComponent>().currentStats = RoR2.Stats.StatSheet.New();
-            } else if(Input.GetKeyDown(KeyCode.F4))
-            {
-                Log.Info("STAT FIELD TEMPLATE\n");
-                foreach (RoR2.Stats.StatField field in RoR2.Stats.StatSheet.fieldsTemplate)
-                {
-                    Log.Info($"{field.name} : {field}");
-                }
-            }
-        }
-
-        private void PurchaseHook(On.RoR2.Stats.StatManager.orig_OnGoldCollected orig, RoR2.CharacterMaster master, ulong amount)
-        {
-            orig(master, amount);
-            Log.Info("On gold hook");
-        }
-
-        public static void AddStatDefToStatSheet(RoR2.CharacterMaster master)
-        {
-            RoR2.Stats.StatDef.Register("morestatistics.perstage.goldcollected", StatRecordType.Sum, StatDataType.ULong, 1.0);
+            //    Log.Info("STAT FIELDS\n");
+            //    foreach (RoR2.Stats.StatField field in statSheet.fields)
+            //    {
+            //        Log.Info($"{field.name}");
+            //    }
+            //}
+            //else if (Input.GetKeyDown(KeyCode.F3))
+            //{
+            //    RoR2.CharacterBody body = PlayerCharacterMasterController.instances[0].master.GetBody();
+            //    body.healthComponent.Die();
+            //}
         }
     }
 }

@@ -9,7 +9,7 @@ namespace MoreStatistics
         //The mod's AssetBundle
         public static AssetBundle mainBundle;
         //A constant of the AssetBundle's name.
-        public const string bundleName = "nullos.statstriptemplate";
+        public const string bundleName = "morebundles";
         public const string assetBundleFolder = "assetbundles";
 
         //The direct path to your AssetBundle
