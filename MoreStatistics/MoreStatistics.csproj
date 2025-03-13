@@ -27,7 +27,7 @@
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="copy &quot;$(TargetPath)&quot; &quot;C:\Users\mathi\AppData\Roaming\r2modmanPlus-local\RiskOfRain2\profiles\Dev\BepInEx\plugins\Unknown-MoreStatistics&quot;" />
+    <Exec Command="copy &quot;$(TargetPath)&quot; &quot;C:\Users\mathi\AppData\Roaming\r2modmanPlus-local\RiskOfRain2\profiles\Dev\BepInEx\plugins\Nullos-MoreStatistics\MoreStatistics&quot;" />
   </Target>
 
 </Project>

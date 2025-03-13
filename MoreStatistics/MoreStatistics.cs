@@ -8,21 +8,20 @@ using System.IO;
 using System.Linq;
 using TMPro;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-using static RoR2.EOSStatManager;
 
+[assembly: HG.Reflection.SearchableAttribute.OptInAttribute]
 namespace MoreStatistics
 {
     [BepInDependency(LanguageAPI.PluginGUID)]
-
+    
     [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
 
     public class MoreStatistics : BaseUnityPlugin
     {
         public const string PluginGUID = "com.Nullos.MoreStatistics";
         public const string PluginName = "MoreStatistics";
-        public const string PluginVersion = "2.0.1";
+        public const string PluginVersion = "2.0.2";
 
         public static PluginInfo PInfo { get; private set; }
 
@@ -45,8 +44,8 @@ namespace MoreStatistics
         private GameObject mobStatsPanel = null;
 
         // Stat names
-        private List<string> mobNames;
-        private string[] statPrefix = { "damageDealtTo", "damageTakenFrom", "killsAgainst", "killsAgainstElite" };
+        private List<string> mobBlacklist;
+        private string[] statPrefix = { "damageDealtTo", "damageTakenFrom", "killsAgainst" };
 
         private void OnEnable()
         {
@@ -67,8 +66,8 @@ namespace MoreStatistics
             PInfo = Info;
 
             // Use only mobs from the txt file
-            string mobNamesPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(MoreStatistics.PInfo.Location), "mobNames.txt");
-            populateMobList(mobNamesPath);
+            string blackListPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(MoreStatistics.PInfo.Location), "mobNames.txt");
+            populateMobList(blackListPath);
 
             // Load assets
             Assets.Init();
@@ -220,8 +219,13 @@ namespace MoreStatistics
         {
             List<string> enemiesNamesPlayerInteractedWith = new List<string>();
 
-            foreach(string enemyName in mobNames)
+            foreach(string enemyName in BodyCatalog.bodyNames)
             {
+                if (mobBlacklist.Contains(enemyName))
+                {
+                    continue;
+                }
+
                 foreach(string prefix in statPrefix)
                 {
                     string statName = $"{prefix}.{enemyName}";
@@ -246,11 +250,11 @@ namespace MoreStatistics
         private void populateMobList(string path)
         {
             char[] charsToTrim = { ' ', '\n' };
-            mobNames = new List<string>();
+            mobBlacklist = new List<string>();
             var lines = File.ReadLines(path);
             foreach(var line in lines)
             {
-                mobNames.Add(line.Trim(charsToTrim));
+                mobBlacklist.Add(line.Trim(charsToTrim));
             }
         }
 
@@ -286,21 +290,33 @@ namespace MoreStatistics
 
         private void Update()
         {
-            //if (Input.GetKeyDown(KeyCode.F2))
-            //{
-            //    RoR2.Stats.StatSheet statSheet = PlayerCharacterMasterController.instances[0].master.GetComponent<RoR2.Stats.PlayerStatsComponent>().currentStats;
+            if (Input.GetKeyDown(KeyCode.F2))
+            {
+                StatSheet statSheet = PlayerCharacterMasterController.instances[0].master.GetComponent<PlayerStatsComponent>().currentStats;
 
-            //    Log.Info("STAT FIELDS\n");
-            //    foreach (RoR2.Stats.StatField field in statSheet.fields)
-            //    {
-            //        Log.Info($"{field.name}");
-            //    }
-            //}
-            //else if (Input.GetKeyDown(KeyCode.F3))
-            //{
-            //    RoR2.CharacterBody body = PlayerCharacterMasterController.instances[0].master.GetBody();
-            //    body.healthComponent.Die();
-            //}
+                Log.Info("STAT FIELDS\n");
+                foreach (StatField field in statSheet.fields)
+                {
+                    Log.Info($"{field.name}");
+                }
+            }
+            else if (Input.GetKeyDown(KeyCode.F3))
+            {
+                CharacterBody body = PlayerCharacterMasterController.instances[0].master.GetBody();
+                body.healthComponent.Die();
+            }
+        }
+
+        [ConCommand(commandName = "ms_body_portraits", flags = ConVarFlags.None, helpText = "Prints a list of all character bodies with their associated portrait icon name.")]
+        private static void cmd_bodyPortraits(ConCommandArgs args)
+        {
+            Log.Info("Command");
+            foreach(CharacterBody characterBody in BodyCatalog.allBodyPrefabBodyBodyComponents)
+            {
+                string bodyName = BodyCatalog.GetBodyName(BodyCatalog.FindBodyIndex(characterBody));
+                string bodyIcon = characterBody.portraitIcon.name;
+                Debug.Log($"{bodyName} - {bodyIcon}");
+            }
         }
     }
 }
