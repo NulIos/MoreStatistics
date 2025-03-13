@@ -2,6 +2,7 @@ using BepInEx;
 using R2API;
 using RoR2;
 using RoR2.Stats;
+using RoR2.UI;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -46,6 +47,9 @@ namespace MoreStatistics
         // Stat names
         private List<string> mobBlacklist;
         private string[] statPrefix = { "damageDealtTo", "damageTakenFrom", "killsAgainst" };
+
+        // Font
+        private TMP_FontAsset font = null;
 
         private void OnEnable()
         {
@@ -96,6 +100,8 @@ namespace MoreStatistics
             GameObject mobButtonGO = buttonsArea.transform.Find("MobStatsButton").gameObject;
             Button mobButton = mobButtonGO.GetComponent<Button>();
             mobButton.onClick.AddListener(openStatPanel);
+
+            setFont(self.transform);
         }
 
         // Hook onto SetPlayerInfo (creates the UI for the end of run screen and assign stats)
@@ -103,7 +109,6 @@ namespace MoreStatistics
         {
             if (!self.statsToDisplay.Contains(statsToDisplay[0]))
             {
-                Log.Info("Stats added");
                 self.statsToDisplay = self.statsToDisplay.Concat(statsToDisplay).ToArray();
             }
 
@@ -117,7 +122,11 @@ namespace MoreStatistics
 
             StatSheet statSheet = playerInfo.statSheet;
             StatDef statDef;
-            ulong value;
+
+            GameObject bodyPrefab;
+            CharacterBody characterBody;
+            Texture bodyIcon;
+            ulong kills, damageDealt, damageTaken;
 
             // Mithrix has multiple bodies depending on combat phase
             ulong killsMithrix = 0;
@@ -125,92 +134,55 @@ namespace MoreStatistics
             ulong damageTakenFromMithrix = 0;
             GameObject mithrixStatStrip = null;
 
-            foreach(string enemyName in enemiesNamesPlayerInteractedWith)
+            foreach (string enemyName in enemiesNamesPlayerInteractedWith)
             {
-                GameObject bodyPrefab;
-                CharacterBody characterBody;
-                Texture bodyIcon;
-                GameObject statStrip;
-                if (enemyName == "BrotherHauntBody" || enemyName == "BrotherHurtBody")
-                {
-                    if(mithrixStatStrip == null)
-                    {
-                        bodyPrefab = BodyCatalog.FindBodyPrefab(enemyName);
-                        characterBody = bodyPrefab.GetComponent<CharacterBody>();
-
-                        bodyIcon = characterBody.portraitIcon;
-
-                        statStrip = Instantiate(mobStatsStripPrefab, stripContainerTransform);
-                        statStrip.transform.Find("Image/Image").GetComponent<RawImage>().texture = bodyIcon;
-
-                        // Kills against enemies
-                        statDef = StatDef.Find($"killsAgainst.{enemyName}");
-                        value = statSheet.GetStatValueULong(statDef);
-                        statStrip.transform.Find("Killed/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
-                        killsMithrix = value;
-
-                        // Damage dealt
-                        statDef = StatDef.Find($"damageDealtTo.{enemyName}");
-                        value = statSheet.GetStatValueULong(statDef);
-                        statStrip.transform.Find("DamageDealt/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
-                        damageDealtToMithrix = value;
-
-                        // Damage taken
-                        statDef = StatDef.Find($"damageTakenFrom.{enemyName}");
-                        value = statSheet.GetStatValueULong(statDef);
-                        statStrip.transform.Find("DamageTaken/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
-                        damageTakenFromMithrix = value;
-
-                        mithrixStatStrip = statStrip;
-                    }
-                    else
-                    {
-                        statStrip = mithrixStatStrip;
-
-                        statDef = StatDef.Find($"killsAgainst.{enemyName}");
-                        value = statSheet.GetStatValueULong(statDef) + killsMithrix;
-                        statStrip.transform.Find("Killed/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
-                        killsMithrix = value;
-
-                        // Damage dealt
-                        statDef = StatDef.Find($"damageDealtTo.{enemyName}");
-                        value = statSheet.GetStatValueULong(statDef) + damageDealtToMithrix;
-                        statStrip.transform.Find("DamageDealt/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
-                        damageDealtToMithrix = value;
-
-                        // Damage taken
-                        statDef = StatDef.Find($"damageTakenFrom.{enemyName}");
-                        value = statSheet.GetStatValueULong(statDef) + damageTakenFromMithrix;
-                        statStrip.transform.Find("DamageTaken/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
-                        damageTakenFromMithrix = value;
-                    }
-
-                    continue;
-                }
-
                 bodyPrefab = BodyCatalog.FindBodyPrefab(enemyName);
                 characterBody = bodyPrefab.GetComponent<CharacterBody>();
 
                 bodyIcon = characterBody.portraitIcon;
 
-                statStrip = Instantiate(mobStatsStripPrefab, stripContainerTransform);
-                statStrip.transform.Find("Image/Image").GetComponent<RawImage>().texture = bodyIcon;
-
-                // Kills against enemies
+                // Kills
                 statDef = StatDef.Find($"killsAgainst.{enemyName}");
-                value = statSheet.GetStatValueULong(statDef);
-                statStrip.transform.Find("Killed/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
+                kills = statSheet.GetStatValueULong(statDef);
 
                 // Damage dealt
                 statDef = StatDef.Find($"damageDealtTo.{enemyName}");
-                value = statSheet.GetStatValueULong(statDef);
-                statStrip.transform.Find("DamageDealt/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
+                damageDealt = statSheet.GetStatValueULong(statDef);
 
                 // Damage taken
                 statDef = StatDef.Find($"damageTakenFrom.{enemyName}");
-                value = statSheet.GetStatValueULong(statDef);
-                statStrip.transform.Find("DamageTaken/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(value);
+                damageTaken = statSheet.GetStatValueULong(statDef);
+
+                if(enemyName == "BrotherBody" || enemyName == "BrotherGlassBody" || enemyName == "BrotherHauntBody" || enemyName == "BrotherHurtBody")
+                {
+                    if(mithrixStatStrip == null)
+                    {
+                        mithrixStatStrip = Instantiate(mobStatsStripPrefab, stripContainerTransform);
+                    }
+
+                    killsMithrix += kills;
+                    damageDealtToMithrix += damageDealt;
+                    damageTakenFromMithrix += damageTaken;
+                    fillStatStrip(mithrixStatStrip, bodyIcon, killsMithrix, damageDealtToMithrix, damageTakenFromMithrix);
+                }
+                else
+                {
+                    GameObject statStrip = Instantiate(mobStatsStripPrefab, stripContainerTransform);
+                    fillStatStrip(statStrip, bodyIcon, kills, damageDealt, damageTaken);
+                }
             }
+        }
+
+        private void fillStatStrip(GameObject statStrip, Texture icon, ulong kills, ulong damageDealt, ulong damageTaken)
+        {
+            if(icon != null)
+            {
+                statStrip.transform.Find("Image/Image").GetComponent<RawImage>().texture = icon;
+            }
+
+            statStrip.transform.Find("Killed/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(kills);
+            statStrip.transform.Find("DamageDealt/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(damageDealt);
+            statStrip.transform.Find("DamageTaken/Value").GetComponent<TextMeshProUGUI>().text = TextSerialization.ToStringNumeric(damageTaken);
         }
 
         // Check for non null values in enemies stats, this means the player interacted with it i.e. took dmg from it or dealt dmg...
@@ -288,6 +260,21 @@ namespace MoreStatistics
             }
         }
 
+        private void setFont(Transform gameEndReportPanel)
+        {
+            font = gameEndReportPanel.Find("SafeArea (JUICED)/HeaderArea/DeathFlavorText").GetComponent<HGTextMeshProUGUI>().font;
+
+            // Panel
+            mobStatsPanelPrefab.transform.Find("Panel/Header/Killed/Value").GetComponent<TextMeshProUGUI>().font = font;
+            mobStatsPanelPrefab.transform.Find("Panel/Header/DamageDealt/Value").GetComponent<TextMeshProUGUI>().font = font;
+            mobStatsPanelPrefab.transform.Find("Panel/Header/DamageTaken/Value").GetComponent<TextMeshProUGUI>().font = font;
+
+            // Stat strip
+            mobStatsStripPrefab.transform.Find("Killed/Value").GetComponent<TextMeshProUGUI>().font = font;
+            mobStatsStripPrefab.transform.Find("DamageDealt/Value").GetComponent<TextMeshProUGUI>().font = font;
+            mobStatsStripPrefab.transform.Find("DamageTaken/Value").GetComponent<TextMeshProUGUI>().font = font;
+        }
+
         private void Update()
         {
             if (Input.GetKeyDown(KeyCode.F2))
@@ -310,12 +297,11 @@ namespace MoreStatistics
         [ConCommand(commandName = "ms_body_portraits", flags = ConVarFlags.None, helpText = "Prints a list of all character bodies with their associated portrait icon name.")]
         private static void cmd_bodyPortraits(ConCommandArgs args)
         {
-            Log.Info("Command");
             foreach(CharacterBody characterBody in BodyCatalog.allBodyPrefabBodyBodyComponents)
             {
                 string bodyName = BodyCatalog.GetBodyName(BodyCatalog.FindBodyIndex(characterBody));
                 string bodyIcon = characterBody.portraitIcon.name;
-                Debug.Log($"{bodyName} - {bodyIcon}");
+                Log.Info($"{bodyName} - {bodyIcon}");
             }
         }
     }
